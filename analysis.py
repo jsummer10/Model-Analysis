@@ -6,8 +6,10 @@ Description : This file performs a linear regression and correlation matrix
               analysis with the provided dataset
 """
 
+import argparse
 import datetime
 import os
+import time
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -16,11 +18,23 @@ from scipy import stats
 import statsmodels.api as sm
 import seaborn as sn
 import matplotlib.pyplot as plt
+from openpyxl import load_workbook
 
 # Constants for analysis
 PVALUE_CUTOFF = 0.05
 CORRELATION_CUTOFF = 0.5
 HIGH_CORRELATION_CUTOFF = 0.7
+
+
+def getArguments():
+    """ Read in command line arguments """
+    parser = argparse.ArgumentParser(description='This program performs an analysis')
+
+    parser.add_argument('-f', '--filepath', help='Filepath of the excel file')
+    parser.add_argument('-s', '--sheet', help='Sheet name for the desired data')
+    parser.add_argument('-a', '--all', help='Run analysis for all sheets', action="store_true")
+
+    return parser.parse_args()
 
 
 def sort_pvalue(val):
@@ -38,6 +52,9 @@ class Analysis:
         self.raw_data_file = filename
         self.sheet_name = sheet
         self.verbose = verbose
+        self.file_dir = 'output/' + self.sheet_name + '/'
+
+        start_time = time.time()
 
         self.create_output_file()
         self.read_file_data()
@@ -49,16 +66,19 @@ class Analysis:
         self.keep_similar()
         self.close_output_file()
 
+        completion_time = '%.2f' % float(time.time() - start_time)
+        print(sheet + ' Analysis Complete (' + completion_time + ' seconds)')
+
 
     def create_output_file(self):
         """ Create the file to save output data to """
-        if not os.path.isdir('output/'):
-            os.mkdir('output/')
+        if not os.path.isdir(self.file_dir):
+            os.makedirs(self.file_dir)
 
         # name the file using the current date and time
-        today = datetime.datetime.now()
-        self.current_time = today.strftime("%Y%m%d_%H%M%S")
-        filename = 'output/' + self.current_time + '.txt'
+        #today = datetime.datetime.now()
+        #self.current_time = today.strftime("%Y%m%d_%H%M%S")
+        filename = self.file_dir + self.sheet_name + '.txt'
         self.output_file = open(filename, 'w')
 
 
@@ -112,8 +132,8 @@ class Analysis:
         if self.verbose:
             self.write_output('\n' + ('=' * 40))
 
-        self.write_output('\nKeep based on p-value: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
-        self.write_output('---------------------------------------')
+        self.write_output('\nKeep based on regression: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
+        self.write_output('------------------------------------------')
 
         if len(self.retained_metrics['pvalue']) == 0:
             self.write_output('None')
@@ -134,7 +154,7 @@ class Analysis:
         figure = plt.gcf()
         figure.set_size_inches(30, 20)
         plt.title("Correlation Matrix")
-        plt.savefig('output/' + self.current_time + '_matrix.pdf')
+        plt.savefig(self.file_dir + self.sheet_name + '-Matrix.pdf')
         
         # clear plot to prevent future interference
         plt.clf()
@@ -149,7 +169,7 @@ class Analysis:
 
         figure = plt.gcf()
         figure.set_size_inches(15, 12)
-        plt.savefig('output/' + self.current_time + '_correlation.pdf')
+        plt.savefig(self.file_dir + self.sheet_name + '-Correlation.pdf')
 
 
     def correlated(self):
@@ -203,5 +223,28 @@ class Analysis:
             self.write_output('None')
     
 
+def main():
+    """ Main function for the analysis """
+
+    args = getArguments()
+
+    filepath = 'train.xlsx'
+    sheets = []
+
+    if args.filepath and os.path.isfile(args.filepath): 
+       filepath = args.filepath 
+    
+    if args.sheet:   
+        sheets = [args.sheet]
+    elif args.all:
+        wb = load_workbook(filepath, read_only=True, keep_links=False)
+        sheets = wb.sheetnames
+    else:
+        print('Please provide the sheet name for the data (Example: -s IT0)')
+        return
+
+    for sheet in sheets:
+        Analysis(filepath, sheet)
+
 if __name__ == '__main__':
-    Analysis('train.xlsx', 'Train-Cleaned')
+    main()
