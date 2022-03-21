@@ -34,9 +34,10 @@ class Analysis:
         'correlation': {}
     }
 
-    def __init__(self, filename, sheet):
+    def __init__(self, filename, sheet, verbose = None):
         self.raw_data_file = filename
         self.sheet_name = sheet
+        self.verbose = verbose
 
         self.create_output_file()
         self.read_file_data()
@@ -88,7 +89,12 @@ class Analysis:
 
         X = sm.add_constant(X)
         self.regression_model = sm.OLS(Y, X).fit()
-        self.write_output(str(self.regression_model.summary()))
+
+        if self.verbose:
+            self.write_output(str(self.regression_model.summary()))
+        else:
+            self.write_output('R-Squared: ' + '{:3f}'.format(self.regression_model.rsquared))
+
 
         # generate the correlation matrix dataframe
         self.correlation_df = self.train_df.corr()
@@ -103,9 +109,15 @@ class Analysis:
             if self.regression_model.pvalues[i] < PVALUE_CUTOFF:
                 self.retained_metrics['pvalue'][self.data_columns[i]] = self.regression_model.pvalues[i]
 
-        self.write_output('\n\n' + ('=' * 40) + '\n')
-        self.write_output('Keep based on p-value: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
-        self.write_output('-----------------------------------')
+        if self.verbose:
+            self.write_output('\n' + ('=' * 40))
+
+        self.write_output('\nKeep based on p-value: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
+        self.write_output('---------------------------------------')
+
+        if len(self.retained_metrics['pvalue']) == 0:
+            self.write_output('None')
+            return
 
         # sort by pvalue
         self.retained_metrics['pvalue'] = dict(sorted(self.retained_metrics['pvalue'].items(), 
@@ -113,6 +125,7 @@ class Analysis:
 
         for metric, pvalue in self.retained_metrics['pvalue'].items():
             self.write_output('{:15s}: {:.2e}'.format(metric, pvalue))
+            
 
 
     def correlation_matrix(self):
@@ -147,8 +160,13 @@ class Analysis:
         correlated_columns = sorted_df.index[sorted_df['SalePrice'] > CORRELATION_CUTOFF].tolist()
         self.retained_metrics['correlation'] = dict.fromkeys(correlated_columns , None)
 
-        self.write_output('\nKeep based on Corr: (Cutoff of ' + str(CORRELATION_CUTOFF) + ')')
-        self.write_output('-----------------------------------')
+        self.write_output('\nKeep based on correlation: (Cutoff of ' + str(CORRELATION_CUTOFF) + ')')
+        self.write_output('------------------------------------------')
+
+        if len(self.retained_metrics['correlation']) == 0:
+            self.write_output('None')
+            return
+
         for metric in correlated_columns:
             if metric == 'SalePrice':
                 continue
@@ -173,11 +191,17 @@ class Analysis:
     def keep_similar(self):
         """ List off p-value and correlation values that should both be kept """
         self.write_output('\nKeep both:')
-        self.write_output('-----------------------------------')
+        self.write_output('--------------')
+
+        match_found = False
 
         for metric in self.retained_metrics['correlation']:
             if metric in self.retained_metrics['pvalue']:
                 self.write_output(metric)
+                match_found = True
+
+        if not match_found:
+            self.write_output('None')
     
 
 if __name__ == '__main__':
