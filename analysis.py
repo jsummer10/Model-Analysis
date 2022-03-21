@@ -40,7 +40,7 @@ class Analysis:
         self.read_file_data()
         self.linear_regression()
         self.pvalues()
-        self.keep_correlated()
+        self.correlated()
         self.correlation_matrix()
         self.correlation_chart()
         self.keep_similar()
@@ -103,7 +103,7 @@ class Analysis:
                 self.keep_pvalue_metrics.append(self.data_columns[i])
 
         self.write_output('\n\n' + ('=' * 40) + '\n')
-        self.write_output('Keep based on Reg: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
+        self.write_output('Keep based on p-value: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
         self.write_output('-----------------------------------')
         pvalues_meeting_req.sort(key=sort_pvalue) 
         for metric in pvalues_meeting_req:
@@ -135,7 +135,7 @@ class Analysis:
         plt.savefig('output/' + self.current_time + '_correlation.pdf')
 
 
-    def keep_correlated(self):
+    def correlated(self):
         """ Analyze correlated values and parse the ones to keep """
         sorted_df = self.correlation_df.sort_values(by='SalePrice', ascending=False)
 
