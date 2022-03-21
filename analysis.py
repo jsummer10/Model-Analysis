@@ -29,8 +29,10 @@ def sort_pvalue(val):
 
 
 class Analysis:
-    keep_correlated_metrics = []
-    keep_pvalue_metrics = []
+    retained_metrics = {
+        'pvalue': {},
+        'correlation': {}
+    }
 
     def __init__(self, filename, sheet):
         self.raw_data_file = filename
@@ -99,15 +101,18 @@ class Analysis:
         # get all p-values below the specified cutoff
         for i in range(1, len(self.regression_model.pvalues)):
             if self.regression_model.pvalues[i] < PVALUE_CUTOFF:
-                pvalues_meeting_req.append([self.data_columns[i], self.regression_model.pvalues[i]])
-                self.keep_pvalue_metrics.append(self.data_columns[i])
+                self.retained_metrics['pvalue'][self.data_columns[i]] = self.regression_model.pvalues[i]
 
         self.write_output('\n\n' + ('=' * 40) + '\n')
         self.write_output('Keep based on p-value: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
         self.write_output('-----------------------------------')
-        pvalues_meeting_req.sort(key=sort_pvalue) 
-        for metric in pvalues_meeting_req:
-            self.write_output('{:15s}: {:.2e}'.format(metric[0], metric[1]))
+
+        # sort by pvalue
+        self.retained_metrics['pvalue'] = dict(sorted(self.retained_metrics['pvalue'].items(), 
+                                                key=lambda item: item[1]))
+
+        for metric, pvalue in self.retained_metrics['pvalue'].items():
+            self.write_output('{:15s}: {:.2e}'.format(metric, pvalue))
 
 
     def correlation_matrix(self):
@@ -139,23 +144,24 @@ class Analysis:
         """ Analyze correlated values and parse the ones to keep """
         sorted_df = self.correlation_df.sort_values(by='SalePrice', ascending=False)
 
-        self.keep_correlated_metrics = sorted_df.index[sorted_df['SalePrice'] > CORRELATION_CUTOFF].tolist()
+        correlated_columns = sorted_df.index[sorted_df['SalePrice'] > CORRELATION_CUTOFF].tolist()
+        self.retained_metrics['correlation'] = dict.fromkeys(correlated_columns , None)
 
         self.write_output('\nKeep based on Corr: (Cutoff of ' + str(CORRELATION_CUTOFF) + ')')
         self.write_output('-----------------------------------')
-        for metric in self.keep_correlated_metrics:
+        for metric in correlated_columns:
             if metric == 'SalePrice':
                 continue
 
-            metric_value = sorted_df['SalePrice'].loc[[metric]].item()
-            formatted_output = '{:15s}: {:.2f}'.format(metric, metric_value)
+            correlation_value = sorted_df['SalePrice'].loc[[metric]].item()
+            formatted_output = '{:15s}: {:.2f}'.format(metric, correlation_value)
 
             # find multicollinearity between the primary metrics
             secondary_correlations = sorted_df.index[sorted_df[metric] > HIGH_CORRELATION_CUTOFF].tolist()
             mc_metrics = []
 
             for mc_metric in secondary_correlations: 
-                if mc_metric in self.keep_correlated_metrics and mc_metric != 'SalePrice' and mc_metric != metric:
+                if mc_metric in self.retained_metrics['correlation'] and mc_metric != 'SalePrice' and mc_metric != metric:
                     mc_metrics.append(mc_metric)
 
             if len(mc_metrics) > 0:
@@ -169,8 +175,8 @@ class Analysis:
         self.write_output('\nKeep both:')
         self.write_output('-----------------------------------')
 
-        for metric in self.keep_correlated_metrics:
-            if metric in self.keep_pvalue_metrics:
+        for metric in self.retained_metrics['correlation']:
+            if metric in self.retained_metrics['pvalue']:
                 self.write_output(metric)
     
 
