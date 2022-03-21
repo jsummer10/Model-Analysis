@@ -125,7 +125,6 @@ class Analysis:
 
         for metric, pvalue in self.retained_metrics['pvalue'].items():
             self.write_output('{:15s}: {:.2e}'.format(metric, pvalue))
-            
 
 
     def correlation_matrix(self):
