@@ -25,6 +25,9 @@ PVALUE_CUTOFF = 0.05
 CORRELATION_CUTOFF = 0.5
 HIGH_CORRELATION_CUTOFF = 0.7
 
+OUTPUT_DIR = 'output'
+
+summary_filename = os.path.join(OUTPUT_DIR, 'summary.csv')
 
 def getArguments():
     """ Read in command line arguments """
@@ -37,28 +40,42 @@ def getArguments():
     return parser.parse_args()
 
 
+def create_summary_file():
+    """ Create the file to save summary data to """
+    if not os.path.isdir(OUTPUT_DIR):
+        os.makedirs(OUTPUT_DIR)
+
+    summary_file = open(summary_filename, 'w')
+    summary_file.write('Iteration, Metrics, P-Value (<), Correlation (>), Multicollinearity (>), R-Squared, Average Error, MAPE\n')
+    summary_file.close()
+
+
 def sort_pvalue(val):
     """ Sort p-values by value """
     return val[1] 
 
 
 class Analysis:
-    retained_metrics = {
-        'pvalue': {},
-        'correlation': {}
-    }
-
     def __init__(self, filename, sheet, verbose = None):
         self.raw_data_file = filename
         self.sheet_name = sheet
         self.verbose = verbose
-        self.file_dir = 'output/' + self.sheet_name + '/'
+        self.file_dir = os.path.join(OUTPUT_DIR, self.sheet_name, '')
+
+        self.retained_metrics = {
+            'pvalue': {},
+            'correlation': {}
+        }
 
         start_time = time.time()
 
         self.create_output_file()
-        self.read_file_data()
+        
+        if (self.read_file_data() == 1):
+            return
+        
         self.linear_regression()
+        self.test_model()
         self.pvalues()
         self.correlated()
         self.correlation_matrix()
@@ -94,12 +111,18 @@ class Analysis:
 
     def read_file_data(self):
         """ Read the excel file data """
-        df = pd.read_excel(self.raw_data_file, sheet_name=self.sheet_name)
-        self.data_columns = df.columns
+        try:
+            df = pd.read_excel(self.raw_data_file, sheet_name=self.sheet_name)
+            self.data_columns = df.columns
+            half_point = (len(df[self.data_columns[0]]) // 2)
+        except:
+            print('Error reading ' + self.sheet_name)
+            return 1
 
-        # half of the dataset should be used to train the model
-        half_point = (len(df[self.data_columns[0]]) // 2)
         self.train_df = df.iloc[:half_point]
+        self.test_df = df.iloc[half_point:]
+
+        return 0
 
 
     def linear_regression(self):
@@ -110,14 +133,51 @@ class Analysis:
         X = sm.add_constant(X)
         self.regression_model = sm.OLS(Y, X).fit()
 
+        self.regression_coeff = self.regression_model.params
+
         if self.verbose:
             self.write_output(str(self.regression_model.summary()))
-        else:
-            self.write_output('R-Squared: ' + '{:3f}'.format(self.regression_model.rsquared))
-
+            self.write_output('\n' + ('=' * 40))
 
         # generate the correlation matrix dataframe
         self.correlation_df = self.train_df.corr()
+
+
+    def test_model(self):
+        """ Use the coefficients to test the remaining test data """
+        data_points = 0
+        avg_error = 0
+        mape = 0
+
+        for index, row in self.test_df.iterrows():
+            estimated_sale_price = self.regression_coeff[0]
+
+            for i in range(1, len(self.test_df.columns)):
+                estimated_sale_price += row[i] * self.regression_coeff[i]
+
+            absolute_error = abs(row[0] - estimated_sale_price)
+            ape = absolute_error / row[0] 
+
+            data_points += 1
+            avg_error += absolute_error
+            mape += ape
+
+        r_squared_str = '{:3f}'.format(self.regression_model.rsquared)
+        avg_error_str_clean = '${:,.2f}'.format(avg_error / data_points)
+        avg_error_str = '${:.2f}'.format(avg_error / data_points)
+        mape_str = '{:.3f}%'.format((mape / data_points) * 100)
+
+        self.write_output('\nR-Squared: ' + r_squared_str)
+        self.write_output('Average Error: ' + avg_error_str_clean)
+        self.write_output('MAPE: ' + mape_str)
+
+        # write summary
+        summary_file = open(summary_filename, 'a')
+        summary_file.write(self.sheet_name + ',' + str(len(self.test_df.columns) - 1) + \
+            ',' + str(PVALUE_CUTOFF) + ',' + str(CORRELATION_CUTOFF) + ',' + \
+            str(HIGH_CORRELATION_CUTOFF) + ',' + r_squared_str + ',' + \
+            avg_error_str + ',' + mape_str + '\n')
+        summary_file.close()
 
 
     def pvalues(self):
@@ -128,9 +188,6 @@ class Analysis:
         for i in range(1, len(self.regression_model.pvalues)):
             if self.regression_model.pvalues[i] < PVALUE_CUTOFF:
                 self.retained_metrics['pvalue'][self.data_columns[i]] = self.regression_model.pvalues[i]
-
-        if self.verbose:
-            self.write_output('\n' + ('=' * 40))
 
         self.write_output('\nKeep based on regression: (Cutoff of ' + str(PVALUE_CUTOFF) + ')')
         self.write_output('------------------------------------------')
@@ -240,11 +297,13 @@ def main():
         wb = load_workbook(filepath, read_only=True, keep_links=False)
         sheets = wb.sheetnames
     else:
-        print('Please provide the sheet name for the data (Example: -s IT0)')
+        print('Please provide the sheet name for the data (Example: -s IT1)')
         return
 
+    create_summary_file()
+
     for sheet in sheets:
-        Analysis(filepath, sheet)
+        Analysis(filepath, sheet, verbose=True)
 
 if __name__ == '__main__':
     main()
