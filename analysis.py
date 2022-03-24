@@ -1,5 +1,5 @@
 """
-Application : Kaggle Assignment 
+Application : Kaggle Data Analysis 
 File name   : analysis.py
 Authors     : Jacob Summerville
 Description : This file performs a linear regression and correlation matrix 
@@ -8,17 +8,17 @@ Description : This file performs a linear regression and correlation matrix
 
 import argparse
 import datetime
-import os
-import time
-import pandas as pd
-import numpy as np
-from sklearn.linear_model import LinearRegression
-from sklearn import datasets, linear_model
-from scipy import stats
-import statsmodels.api as sm
-import seaborn as sn
 import matplotlib.pyplot as plt
+import numpy as np
 from openpyxl import load_workbook
+import os
+import pandas as pd
+from scipy import stats
+import seaborn as sn
+from sklearn import datasets, linear_model
+from sklearn.linear_model import LinearRegression
+import statsmodels.api as sm
+import time
 
 # Constants for analysis
 PVALUE_CUTOFF = 0.05
@@ -26,7 +26,6 @@ CORRELATION_CUTOFF = 0.5
 HIGH_CORRELATION_CUTOFF = 0.7
 
 OUTPUT_DIR = 'output'
-
 summary_filename = os.path.join(OUTPUT_DIR, 'summary.csv')
 
 def getArguments():
@@ -282,7 +281,6 @@ class Analysis:
 
 def main():
     """ Main function for the analysis """
-
     args = getArguments()
 
     filepath = 'train.xlsx'
