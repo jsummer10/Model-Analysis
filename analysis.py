@@ -28,6 +28,8 @@ HIGH_CORRELATION_CUTOFF = 0.7
 OUTPUT_DIR = 'output'
 summary_filename = os.path.join(OUTPUT_DIR, 'summary.csv')
 
+DEPEND_VAR = 'SalePrice'
+
 def getArguments():
     """ Read in command line arguments """
     parser = argparse.ArgumentParser(description='This program performs an analysis')
@@ -127,7 +129,7 @@ class Analysis:
     def linear_regression(self):
         """ Perform linear regression and output the summary """
         X = self.train_df[self.data_columns[1:]]
-        Y = self.train_df['SalePrice']
+        Y = self.train_df[DEPEND_VAR]
 
         X = sm.add_constant(X)
         self.regression_model = sm.OLS(Y, X).fit()
@@ -217,11 +219,11 @@ class Analysis:
 
 
     def correlation_chart(self):
-        """ Create a correlation matrix with Sales Price """
-        correlation_values = self.correlation_df[['SalePrice']].sort_values(by='SalePrice', ascending=False)
+        """ Create a correlation matrix with the dependent variable """
+        correlation_values = self.correlation_df[[DEPEND_VAR]].sort_values(by=DEPEND_VAR, ascending=False)
 
         heatmap = sn.heatmap(correlation_values, vmin=-1, vmax=1, annot=True, cmap='BrBG')
-        heatmap.set_title('Features Correlating with Sale Price', pad=16);
+        heatmap.set_title('Features Correlating with ' + DEPEND_VAR, pad=16);
 
         figure = plt.gcf()
         figure.set_size_inches(15, 12)
@@ -230,9 +232,9 @@ class Analysis:
 
     def correlated(self):
         """ Analyze correlated values and parse the ones to keep """
-        sorted_df = self.correlation_df.sort_values(by='SalePrice', ascending=False)
+        sorted_df = self.correlation_df.sort_values(by=DEPEND_VAR, ascending=False)
 
-        correlated_columns = sorted_df.index[sorted_df['SalePrice'] > CORRELATION_CUTOFF].tolist()
+        correlated_columns = sorted_df.index[sorted_df[DEPEND_VAR] > CORRELATION_CUTOFF].tolist()
         self.retained_metrics['correlation'] = dict.fromkeys(correlated_columns , None)
 
         self.write_output('\nKeep based on correlation: (Cutoff of ' + str(CORRELATION_CUTOFF) + ')')
@@ -243,10 +245,10 @@ class Analysis:
             return
 
         for metric in correlated_columns:
-            if metric == 'SalePrice':
+            if metric == DEPEND_VAR:
                 continue
 
-            correlation_value = sorted_df['SalePrice'].loc[[metric]].item()
+            correlation_value = sorted_df[DEPEND_VAR].loc[[metric]].item()
             formatted_output = '{:15s}: {:.2f}'.format(metric, correlation_value)
 
             # find multicollinearity between the primary metrics
@@ -254,7 +256,7 @@ class Analysis:
             mc_metrics = []
 
             for mc_metric in secondary_correlations: 
-                if mc_metric in self.retained_metrics['correlation'] and mc_metric != 'SalePrice' and mc_metric != metric:
+                if mc_metric in self.retained_metrics['correlation'] and mc_metric != DEPEND_VAR and mc_metric != metric:
                     mc_metrics.append(mc_metric)
 
             if len(mc_metrics) > 0:
