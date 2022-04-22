@@ -234,7 +234,9 @@ class Analysis:
         """ Analyze correlated values and parse the ones to keep """
         sorted_df = self.correlation_df.sort_values(by=DEPEND_VAR, ascending=False)
 
-        correlated_columns = sorted_df.index[sorted_df[DEPEND_VAR] > CORRELATION_CUTOFF].tolist()
+        pos_correlated_columns = sorted_df.index[sorted_df[DEPEND_VAR] > CORRELATION_CUTOFF].tolist()
+        neg_correlated_columns = sorted_df.index[sorted_df[DEPEND_VAR] < (-1 * CORRELATION_CUTOFF)].tolist()
+        correlated_columns = pos_correlated_columns + neg_correlated_columns
         self.retained_metrics['correlation'] = dict.fromkeys(correlated_columns , None)
 
         self.write_output('\nKeep based on correlation: (Cutoff of ' + str(CORRELATION_CUTOFF) + ')')
